@@ -4,7 +4,10 @@ from pathlib import Path
 
 import pandas as pd
 
-DATA_FILE = Path("data/sample_data.csv")
+# Locate the project root, even when this script is run
+# from a different working directory.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATA_FILE = PROJECT_ROOT / "data" / "sample_data.csv"
 
 REQUIRED_COLUMNS = [
     "transaction_id",
@@ -15,92 +18,118 @@ REQUIRED_COLUMNS = [
 
 
 def validate_batch(file_path):
-    print(f"Starting batch validation: {file_path}")
+    print("=" * 50)
+    print("BATCH DATA QUALITY VALIDATION")
+    print("=" * 50)
 
+    # 1. Check whether the file exists.
     if not file_path.exists():
-        print(f"ERROR: File not found: {file_path}")
+        print(f"FAILED: Data file not found: {file_path}")
         return False
 
+    # 2. Load the batch.
     try:
         df = pd.read_csv(file_path)
     except Exception as exc:
-        print(f"ERROR: Could not read CSV: {exc}")
+        print(f"FAILED: Could not read CSV: {exc}")
         return False
+
+    print(f"File: {file_path.name}")
+    print(f"Records loaded: {len(df)}")
 
     errors = []
 
-    # Check required columns
-    missing_columns = set(REQUIRED_COLUMNS) - set(df.columns)
+    # 3. Check required columns.
+    missing_columns = [
+        col for col in REQUIRED_COLUMNS if col not in df.columns
+    ]
 
     if missing_columns:
-        errors.append(
-            f"Missing columns: {sorted(missing_columns)}"
-        )
-        print("\n".join(errors))
+        print(f"FAILED: Missing columns: {missing_columns}")
         return False
 
-    print(f"Records loaded: {len(df)}")
-
+    # 4. Check that the batch contains records.
     if df.empty:
-        errors.append("Batch contains no records.")
+        errors.append("The batch contains no records.")
 
-    # Check missing values
+    # 5. Check missing and blank values.
     for column in REQUIRED_COLUMNS:
-        missing = int(df[column].isna().sum())
+        values = df[column]
+        missing = values.isna()
 
-        if missing > 0:
+        if pd.api.types.is_object_dtype(values.dtype):
+            missing = missing | values.astype("string").str.strip().eq(
+                ""
+            ).fillna(False)
+
+        count = int(missing.sum())
+
+        if count:
             errors.append(
-                f"{column}: {missing} missing values"
+                f"{column}: {count} missing or blank values"
             )
 
-    # Check duplicate transaction IDs
-    duplicates = int(
-        df["transaction_id"].duplicated().sum()
+    # 6. Check duplicate transaction IDs.
+    ids = df["transaction_id"].astype("string").str.strip()
+    valid_ids = ids.notna() & ids.ne("")
+
+    duplicate_count = int(
+        ids[valid_ids].duplicated().sum()
     )
 
-    if duplicates > 0:
+    if duplicate_count:
         errors.append(
-            f"Found {duplicates} duplicate transaction IDs"
+            f"Found {duplicate_count} duplicate transaction IDs"
         )
 
-    # Check numeric amounts
+    # 7. Check numeric and positive transaction amounts.
     amounts = pd.to_numeric(df["amount"], errors="coerce")
 
     invalid_amounts = int(amounts.isna().sum())
 
-    if invalid_amounts > 0:
+    if invalid_amounts:
         errors.append(
-            f"Found {invalid_amounts} invalid amounts"
+            f"Found {invalid_amounts} non-numeric or missing amounts"
         )
 
-    elif (amounts <= 0).any():
-        errors.append("Transaction amounts must be positive.")
+    non_positive = int((amounts.notna() & (amounts <= 0)).sum())
 
-    # Check transaction dates
+    if non_positive:
+        errors.append(
+            f"Found {non_positive} amounts that are not positive"
+        )
+
+    # 8. Check transaction dates.
     dates = pd.to_datetime(
-        df["transaction_date"], errors="coerce"
+        df["transaction_date"],
+        errors="coerce",
+        format="mixed",
     )
 
     invalid_dates = int(dates.isna().sum())
 
-    if invalid_dates > 0:
+    if invalid_dates:
         errors.append(
             f"Found {invalid_dates} invalid transaction dates"
         )
 
-    # Report results
+    # 9. Report the outcome.
+    print("-" * 50)
+
     if errors:
-        print("\nBATCH VALIDATION FAILED")
+        print("STATUS: FAILED")
 
         for error in errors:
-            print(f"- {error}")
+            print(f"ERROR: {error}")
 
-        print("Pipeline stopped. Fix the errors and retry.")
+        print("The batch has been rejected.")
+        print("Fix the errors and push your changes again.")
         return False
 
-    print("BATCH VALIDATION PASSED")
+    print("STATUS: PASSED")
+    print("All data quality checks passed.")
     print(f"Validated records: {len(df)}")
-    print("Batch is ready for downstream processing.")
+    print("The batch is ready for downstream processing.")
 
     return True
 
@@ -108,6 +137,3 @@ def validate_batch(file_path):
 if __name__ == "__main__":
     success = validate_batch(DATA_FILE)
     sys.exit(0 if success else 1)
-
-
-# TESTING TO SEE IF ACTIONS HAVE A REACTION
