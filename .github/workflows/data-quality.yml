@@ -38,4 +38,3 @@ jobs:
 
       - name: Validate production data batch
         run: python src/validate_batch.py
-
