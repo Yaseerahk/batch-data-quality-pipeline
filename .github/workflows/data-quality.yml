@@ -1,18 +1,19 @@
 
-name: Batch Data Quality Pipeline
+name: Development Quality Pipeline
 
 on:
   push:
     branches:
       - "**"
+
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
-  validate-batch:
-    name: Validate Data Batch
+  code-quality:
+    name: Code Quality and Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -29,5 +30,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Validate data batch
+      - name: Check Python code
+        run: python -m ruff check src tests
+
+      - name: Run automated tests
+        run: python -m pytest -v
+
+      - name: Validate production data batch
         run: python src/validate_batch.py
+
