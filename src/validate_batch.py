@@ -27,10 +27,15 @@ def validate_batch(file_path):
         print(f"FAILED: Data file not found: {file_path}")
         return False
 
-    # 2. Load the batch.
+    # 2. Load the batch and handle specific CSV-reading errors.
     try:
         df = pd.read_csv(file_path)
-    except Exception as exc:
+    except (
+        pd.errors.ParserError,
+        pd.errors.EmptyDataError,
+        OSError,
+        UnicodeDecodeError,
+    ) as exc:
         print(f"FAILED: Could not read CSV: {exc}")
         return False
 
@@ -57,7 +62,9 @@ def validate_batch(file_path):
         values = df[column]
         missing = values.isna()
 
-        if pd.api.types.is_object_dtype(values.dtype):
+        if pd.api.types.is_object_dtype(values.dtype) or isinstance(
+            values.dtype, pd.StringDtype
+        ):
             missing = missing | values.astype("string").str.strip().eq(
                 ""
             ).fillna(False)
@@ -92,7 +99,9 @@ def validate_batch(file_path):
             f"Found {invalid_amounts} non-numeric or missing amounts"
         )
 
-    non_positive = int((amounts.notna() & (amounts <= 0)).sum())
+    non_positive = int(
+        (amounts.notna() & (amounts <= 0)).sum()
+    )
 
     if non_positive:
         errors.append(
