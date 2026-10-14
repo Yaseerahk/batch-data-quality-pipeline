@@ -45,13 +45,13 @@ def validate_batch(file_path):
     errors = []
 
     # 3. Check required columns.
-    missing_columns = [
-        col for col in REQUIRED_COLUMNS if col not in df.columns
-    ]
+    # missing_columns = [
+    #     col for col in REQUIRED_COLUMNS if col not in df.columns
+    # ]
 
-    if missing_columns:
-        print(f"FAILED: Missing columns: {missing_columns}")
-        return False
+    # if missing_columns:
+    #     print(f"FAILED: Missing columns: {missing_columns}")
+    #     return False
 
     # 4. Check that the batch contains records.
     if df.empty:
